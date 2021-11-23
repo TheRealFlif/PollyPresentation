@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PollyExamples", "PollyExamples.csproj", "{C495829A-68E5-4992-92FD-303CBAB0AF70}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FaultyWebApi", "FaultyWebApi\FaultyWebApi.csproj", "{A2525159-50B0-4D6D-90F6-DDB21C3E952D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{C495829A-68E5-4992-92FD-303CBAB0AF70}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C495829A-68E5-4992-92FD-303CBAB0AF70}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C495829A-68E5-4992-92FD-303CBAB0AF70}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A2525159-50B0-4D6D-90F6-DDB21C3E952D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2525159-50B0-4D6D-90F6-DDB21C3E952D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2525159-50B0-4D6D-90F6-DDB21C3E952D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2525159-50B0-4D6D-90F6-DDB21C3E952D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -5,4 +5,16 @@
         <TargetFramework>netcoreapp3.1</TargetFramework>
     </PropertyGroup>
 
+    <ItemGroup>
+      <Compile Remove="FaultyWebApi\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Remove="FaultyWebApi\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="FaultyWebApi\**" />
+    </ItemGroup>
+
 </Project>
