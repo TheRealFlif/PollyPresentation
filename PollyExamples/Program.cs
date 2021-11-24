@@ -1,9 +1,12 @@
 ﻿namespace PollyExamples
 {
     using System;
+    using System.ComponentModel.DataAnnotations;
+    using System.Net;
     using System.Net.Http;
     using System.Threading.Tasks;
     using Polly;
+    using Polly.Retry;
     using Polly.Timeout;
 
     static class Program
@@ -21,12 +24,15 @@
         {
             Console.WriteLine("Calling api:s");
 
-            for (int i = 0; i < _uris.Length; i++)
+            foreach (var t in _uris)
             {
-                //Console.WriteLine( CreateFunc(_uris[i]).Invoke()); //"Normal" call
-                Console.WriteLine(UseTimeOutWithTryCatch(_uris[i])); //Call using Time out policy, explicit try ... catch
-                Console.WriteLine(UseTimeOut(_uris[i])); //Call using Time out policy, implicit try ... catch 
-                Console.ReadLine();
+                //Console.WriteLine(CreateFunc(t).Invoke()); //"Normal" call
+                // Console.WriteLine(UseTimeOutWithTryCatch(_uris[i])); //Call using Time out policy, explicit try ... catch
+                // Console.WriteLine(UseTimeOut(_uris[i])); //Call using Time out policy, implicit try ... catch
+                //Console.WriteLine(RetryOnce(t));
+                //Console.WriteLine(RetryTimes(t, 3));
+                Console.WriteLine(RetryTimesWithWait(t, 3));
+                //Console.ReadLine();
             }
 
             Console.WriteLine("Called api:s");
@@ -34,6 +40,7 @@
         }
 
         #region Time out policy
+
         private static string UseTimeOutWithTryCatch(string uri)
         {
             var policy = Policy.Timeout<string>(1, TimeoutStrategy.Pessimistic, OnTimeOut);
@@ -61,7 +68,7 @@
                 //Console.WriteLine(result.FinalException.Message);
             }
 
-            return result.Result??string.Empty;
+            return result.Result ?? string.Empty;
         }
 
         private static void OnTimeOut(Context arg1,
@@ -70,10 +77,73 @@
         {
             Console.WriteLine("Call timed out");
         }
-        
+
         #endregion
-        
+
+        #region Retry
+        private static string RetryOnce(string uri)
+        {
+            Policy<HttpResponseMessage> policy = Policy
+                .HandleResult<HttpResponseMessage>(m => m.StatusCode != HttpStatusCode.OK)
+                .Retry(OnRetry);
+
+            var message = policy.Execute(CreateResponseMessageFunc(uri));
+            return message.Content.ReadAsStringAsync().Result;
+        }
+
+        private static string RetryTimes(string uri, int times)
+        {
+            Policy<HttpResponseMessage> policy = Policy
+                .HandleResult<HttpResponseMessage>(m => m.StatusCode != HttpStatusCode.OK)
+                .Retry(times, OnRetry);
+
+            var message = policy.Execute(CreateResponseMessageFunc(uri));
+            return message.Content.ReadAsStringAsync().Result;
+        }
+
+        private static string RetryTimesWithWait(string uri, int times)
+        {
+            Policy<HttpResponseMessage> policy = Policy
+                .HandleResult<HttpResponseMessage>(m => m.StatusCode != HttpStatusCode.OK)
+                .WaitAndRetry(times, SleepDurationProvider, OnRetry);
+                // .WaitAndRetry(times, (i,
+                //                       context) => SleepDurationProvider(i), OnRetry);
+
+            var message = policy.Execute(CreateResponseMessageFunc(uri));
+            return message.Content.ReadAsStringAsync().Result;
+        }
+
+        private static void OnRetry(DelegateResult<HttpResponseMessage> message,
+                                    TimeSpan timeSpan,
+                                    int retryCount,
+                                    Context context)
+        {
+            OnRetry(message, retryCount);
+        }
+
+        private static TimeSpan SleepDurationProvider(int retryCount)
+        {
+            Console.WriteLine($"SleepDurationProvider: {retryCount}");
+            return TimeSpan.FromMilliseconds(Math.Pow(2, retryCount)*1000+new Random().Next(0,499));
+        }
+
+        private static void OnRetry(DelegateResult<HttpResponseMessage> message,
+                                    int retryCount)
+        {
+            Console.WriteLine($"Received status '{message.Result.StatusCode}' on call #{retryCount}");
+        }
+        #endregion
+
         private static Func<string> CreateFunc(string uri)
+        {
+            return () =>
+            {
+                var content = CreateResponseMessageFunc(uri).Invoke().Content;
+                return content.ReadAsStringAsync().Result;
+            };
+        }
+
+        private static Func<HttpResponseMessage> CreateResponseMessageFunc(string uri)
         {
             return () =>
             {
@@ -87,8 +157,7 @@
                 var client = new HttpClient(httpMessageHandler);
                 Console.WriteLine(uri);
                 var task = client.GetAsync(uri);
-                var content = task.Result.Content;
-                return content.ReadAsStringAsync().Result;
+                return task.Result;
             };
         }
     }
