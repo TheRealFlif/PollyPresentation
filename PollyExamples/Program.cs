@@ -4,7 +4,10 @@
     using System.Net;
     using System.Net.Http;
     using System.Threading.Tasks;
+    using Microsoft.Extensions.Caching.Memory;
     using Polly;
+    using Polly.Caching;
+    using Polly.Caching.Memory;
     using Polly.Timeout;
 
     static class Program
@@ -24,13 +27,16 @@
 
             foreach (var t in Uris)
             {
-                //Console.WriteLine(CreateFunc(t).Invoke()); //"Normal" call
+                //Console.WriteLine(CreateFunc(Uris[3]).Invoke()); //"Normal" call
                 // Console.WriteLine(UseTimeOutWithTryCatch(_uris[i])); //Call using Time out policy, explicit try ... catch
                 // Console.WriteLine(UseTimeOut(_uris[i])); //Call using Time out policy, implicit try ... catch
                 //Console.WriteLine(RetryOnce(t));
                 //Console.WriteLine(RetryTimes(t, 3));
                 //Console.WriteLine(RetryTimesWithWait(t, 3));
-                Console.WriteLine(Fallback(t, Uris[0]));
+                //Console.WriteLine(Fallback(t, Uris[0]));
+                //Console.WriteLine(Cache(Uris[3]));
+                //Console.WriteLine(Cache(Uris[4]));
+                //Console.WriteLine(CacheWithFilter(Uris[4]));
                 //Console.ReadLine();
             }
 
@@ -140,6 +146,40 @@
 
             var message = policy.Execute(() => CreateResponseMessageFunc(uri).Invoke());
             return message.Content.ReadAsStringAsync().Result;
+        }
+        #endregion
+
+        #region Cache
+        static readonly MemoryCache MemoryCache = new MemoryCache(new MemoryCacheOptions());
+        static readonly MemoryCacheProvider MemoryCacheProvider = new MemoryCacheProvider(MemoryCache);
+        
+        static readonly Func<Context, HttpResponseMessage, Ttl> CacheFilter =
+            (ctx, msg) => new Ttl(
+                timeSpan:msg.StatusCode == HttpStatusCode.OK ? TimeSpan.FromMinutes(30) : TimeSpan.Zero,
+                slidingExpiration:true);
+            
+        static readonly IAsyncPolicy<HttpResponseMessage> CacheFilterPolicy =
+            Policy.CacheAsync<HttpResponseMessage>(
+                MemoryCacheProvider.AsyncFor<HttpResponseMessage>(), //note the .AsyncFor<HttpResponseMessage>
+                new ResultTtl<HttpResponseMessage>(CacheFilter),
+                onCacheError: null
+            );
+        
+        static CachePolicy<HttpResponseMessage> cachePolicy = Policy.Cache<HttpResponseMessage>(
+            MemoryCacheProvider,
+            new RelativeTtl(TimeSpan.FromMinutes(5)));
+        
+        private static string Cache(string uri)
+        {
+            var message = cachePolicy.Execute(ctx => CreateResponseMessageFunc(uri).Invoke(), new Context(uri));
+            return message.Content.ReadAsStringAsync().Result;
+        }
+        
+        private static string CacheWithFilter(string uri)
+        {
+            var message = CacheFilterPolicy.ExecuteAsync(ctx => Task.FromResult(CreateResponseMessageFunc(uri).Invoke()), new Context(uri));
+
+            return message.Result.Content.ReadAsStringAsync().Result;
         }
         #endregion
         
