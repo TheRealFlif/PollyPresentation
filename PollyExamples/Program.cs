@@ -1,17 +1,15 @@
 ﻿namespace PollyExamples
 {
     using System;
-    using System.ComponentModel.DataAnnotations;
     using System.Net;
     using System.Net.Http;
     using System.Threading.Tasks;
     using Polly;
-    using Polly.Retry;
     using Polly.Timeout;
 
     static class Program
     {
-        private static string[] _uris =
+        private static readonly string[] Uris =
         {
             "https://localhost:44383/WeatherForecast",
             "https://localhost:44383/NoneExistingWeatherForecast",
@@ -24,14 +22,15 @@
         {
             Console.WriteLine("Calling api:s");
 
-            foreach (var t in _uris)
+            foreach (var t in Uris)
             {
                 //Console.WriteLine(CreateFunc(t).Invoke()); //"Normal" call
                 // Console.WriteLine(UseTimeOutWithTryCatch(_uris[i])); //Call using Time out policy, explicit try ... catch
                 // Console.WriteLine(UseTimeOut(_uris[i])); //Call using Time out policy, implicit try ... catch
                 //Console.WriteLine(RetryOnce(t));
                 //Console.WriteLine(RetryTimes(t, 3));
-                Console.WriteLine(RetryTimesWithWait(t, 3));
+                //Console.WriteLine(RetryTimesWithWait(t, 3));
+                Console.WriteLine(Fallback(t, Uris[0]));
                 //Console.ReadLine();
             }
 
@@ -106,8 +105,6 @@
             Policy<HttpResponseMessage> policy = Policy
                 .HandleResult<HttpResponseMessage>(m => m.StatusCode != HttpStatusCode.OK)
                 .WaitAndRetry(times, SleepDurationProvider, OnRetry);
-                // .WaitAndRetry(times, (i,
-                //                       context) => SleepDurationProvider(i), OnRetry);
 
             var message = policy.Execute(CreateResponseMessageFunc(uri));
             return message.Content.ReadAsStringAsync().Result;
@@ -134,6 +131,18 @@
         }
         #endregion
 
+        #region Fallback
+        private static string Fallback(string uri, string fallbackUri)
+        {
+            var policy = Polly.Fallback.FallbackPolicy<HttpResponseMessage>
+                .HandleResult(s => !s.IsSuccessStatusCode)
+                .Fallback(() => CreateResponseMessageFunc(fallbackUri).Invoke());
+
+            var message = policy.Execute(() => CreateResponseMessageFunc(uri).Invoke());
+            return message.Content.ReadAsStringAsync().Result;
+        }
+        #endregion
+        
         private static Func<string> CreateFunc(string uri)
         {
             return () =>
