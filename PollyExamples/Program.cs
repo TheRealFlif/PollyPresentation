@@ -24,10 +24,12 @@
 
         static void Main(string[] args)
         {
+            Console.Clear();
             Console.WriteLine("Calling api:s");
-
+           
             foreach (var t in Uris)
             {
+                
                 //Console.WriteLine(CreateFunc(Uris[3]).Invoke()); //"Normal" call
                 // Console.WriteLine(UseTimeOutWithTryCatch(_uris[i])); //Call using Time out policy, explicit try ... catch
                 // Console.WriteLine(UseTimeOut(_uris[i])); //Call using Time out policy, implicit try ... catch
@@ -38,8 +40,9 @@
                 //Console.WriteLine(Cache(Uris[3]));
                 //Console.WriteLine(Cache(Uris[4]));
                 //Console.WriteLine(CacheWithFilter(Uris[4]));
-                Console.WriteLine(CircuitBreaker(Uris[4]));
-                //Thread.Sleep(TimeSpan.FromSeconds(3));
+                //Console.WriteLine(CircuitBreaker(Uris[4]));
+                Console.WriteLine(Wrap(t, Uris[4]));
+                Console.WriteLine("---------------------------------------------------\n\n\n");
                 //Console.ReadLine();
             }
 
@@ -181,12 +184,11 @@
         private static string CacheWithFilter(string uri)
         {
             var message = CacheFilterPolicy.ExecuteAsync(ctx => Task.FromResult(CreateResponseMessageFunc(uri).Invoke()), new Context(uri));
-
             return message.Result.Content.ReadAsStringAsync().Result;
         }
         #endregion
         
-        
+        #region Circuit breaker
         static Polly.CircuitBreaker.CircuitBreakerPolicy<HttpResponseMessage> BasicCircuitBreakerPolicy = Policy
             .HandleResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode)
             .CircuitBreaker(2, TimeSpan.FromSeconds(5));
@@ -206,8 +208,26 @@
 
             return message.Content.ReadAsStringAsync().Result;
         }
+        #endregion
         
-        
+        #region Policy wrap
+        private static string Wrap(string uri, string fallbackUri)
+        {
+            var retryPolicy = Policy
+                .HandleResult<HttpResponseMessage>(m => m.StatusCode != HttpStatusCode.OK)
+                .Retry(2, OnRetry);
+            
+            var fallbackPolicy = Polly.Fallback.FallbackPolicy<HttpResponseMessage>
+                .HandleResult(s => !s.IsSuccessStatusCode)
+                .Fallback(() => CreateResponseMessageFunc(fallbackUri).Invoke());
+            
+            var wrapPolicy = Policy.Wrap(retryPolicy, fallbackPolicy);
+
+            var message = wrapPolicy.Execute(CreateResponseMessageFunc(uri));
+
+            return message.Content.ReadAsStringAsync().Result;
+        }
+        #endregion
         
         private static Func<string> CreateFunc(string uri)
         {
