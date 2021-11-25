@@ -3,6 +3,7 @@
     using System;
     using System.Net;
     using System.Net.Http;
+    using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.Extensions.Caching.Memory;
     using Polly;
@@ -37,6 +38,8 @@
                 //Console.WriteLine(Cache(Uris[3]));
                 //Console.WriteLine(Cache(Uris[4]));
                 //Console.WriteLine(CacheWithFilter(Uris[4]));
+                Console.WriteLine(CircuitBreaker(Uris[4]));
+                //Thread.Sleep(TimeSpan.FromSeconds(3));
                 //Console.ReadLine();
             }
 
@@ -182,6 +185,29 @@
             return message.Result.Content.ReadAsStringAsync().Result;
         }
         #endregion
+        
+        
+        static Polly.CircuitBreaker.CircuitBreakerPolicy<HttpResponseMessage> BasicCircuitBreakerPolicy = Policy
+            .HandleResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode)
+            .CircuitBreaker(2, TimeSpan.FromSeconds(5));
+
+        private static string CircuitBreaker(string uri)
+        {
+            HttpResponseMessage message = null;
+            try
+            {
+                message = BasicCircuitBreakerPolicy.Execute(CreateResponseMessageFunc(uri));
+            }
+            catch (Polly.CircuitBreaker.BrokenCircuitException circuitException)
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(5));
+                return circuitException.Message;
+            }
+
+            return message.Content.ReadAsStringAsync().Result;
+        }
+        
+        
         
         private static Func<string> CreateFunc(string uri)
         {
