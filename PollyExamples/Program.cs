@@ -15,34 +15,33 @@
     {
         private static readonly string[] Uris =
         {
-            "https://localhost:44383/WeatherForecast",
-            "https://localhost:44383/NoneExistingWeatherForecast",
-            "https://localhost:44383/InternalServerErrorWeatherForecast",
-            "https://localhost:44383/SlowWeatherForecast/10",
-            "https://localhost:44383/NumberOfExceptionWeatherForecast/3"
+            "https://localhost:5001/WeatherForecast",
+            "https://localhost:5001/NoneExistingWeatherForecast",
+            "https://localhost:5001/InternalServerErrorWeatherForecast",
+            "https://localhost:5001/SlowWeatherForecast/10",
+            "https://localhost:5001/NumberOfExceptionWeatherForecast/3"
         };
 
         static void Main(string[] args)
         {
             Console.Clear();
             Console.WriteLine("Calling api:s");
-           
-            foreach (var t in Uris)
+
+            foreach (var uri in Uris)
             {
-                
-                //Console.WriteLine(CreateFunc(Uris[3]).Invoke()); //"Normal" call
-                // Console.WriteLine(UseTimeOutWithTryCatch(_uris[i])); //Call using Time out policy, explicit try ... catch
-                // Console.WriteLine(UseTimeOut(_uris[i])); //Call using Time out policy, implicit try ... catch
-                //Console.WriteLine(RetryOnce(t));
-                //Console.WriteLine(RetryTimes(t, 3));
-                //Console.WriteLine(RetryTimesWithWait(t, 3));
-                //Console.WriteLine(Fallback(t, Uris[0]));
-                //Console.WriteLine(Cache(Uris[3]));
-                //Console.WriteLine(Cache(Uris[4]));
-                //Console.WriteLine(CacheWithFilter(Uris[4]));
-                //Console.WriteLine(CircuitBreaker(Uris[4]));
-                Console.WriteLine(Wrap(t, Uris[4]));
-                Console.WriteLine("---------------------------------------------------\n\n\n");
+                // Console.WriteLine(CreateFunc(Uris[3]).Invoke()); //"Normal" call
+                // Console.WriteLine(UseTimeOutWithTryCatch(uri)); //Call using Time out policy, explicit try ... catch
+                // Console.WriteLine(UseTimeOut(uri)); //Call using Time out policy, implicit try ... catch
+                // Console.WriteLine(RetryOnce(uri));
+                // Console.WriteLine(RetryTimes(uri, 3));
+                // Console.WriteLine(RetryTimesWithWait(uri, 3));
+                // Console.WriteLine(Fallback(uri, Uris[0]));
+                // Console.WriteLine(Cache(Uris[3]));
+                // Console.WriteLine(Cache(Uris[4]));
+                // Console.WriteLine(CacheWithFilter(Uris[4]));
+                // Console.WriteLine(CircuitBreaker(Uris[4]));
+                // Console.WriteLine(Wrap(uri, Uris[4]));
+                // Console.WriteLine("---------------------------------------------------\n\n\n");
                 //Console.ReadLine();
             }
 
@@ -102,7 +101,8 @@
             return message.Content.ReadAsStringAsync().Result;
         }
 
-        private static string RetryTimes(string uri, int times)
+        private static string RetryTimes(string uri,
+                                         int times)
         {
             Policy<HttpResponseMessage> policy = Policy
                 .HandleResult<HttpResponseMessage>(m => m.StatusCode != HttpStatusCode.OK)
@@ -112,7 +112,8 @@
             return message.Content.ReadAsStringAsync().Result;
         }
 
-        private static string RetryTimesWithWait(string uri, int times)
+        private static string RetryTimesWithWait(string uri,
+                                                 int times)
         {
             Policy<HttpResponseMessage> policy = Policy
                 .HandleResult<HttpResponseMessage>(m => m.StatusCode != HttpStatusCode.OK)
@@ -133,7 +134,7 @@
         private static TimeSpan SleepDurationProvider(int retryCount)
         {
             Console.WriteLine($"SleepDurationProvider: {retryCount}");
-            return TimeSpan.FromMilliseconds(Math.Pow(2, retryCount)*1000+new Random().Next(0,499));
+            return TimeSpan.FromMilliseconds(Math.Pow(2, retryCount) * 1000 + new Random().Next(0, 499));
         }
 
         private static void OnRetry(DelegateResult<HttpResponseMessage> message,
@@ -141,10 +142,13 @@
         {
             Console.WriteLine($"Received status '{message.Result.StatusCode}' on call #{retryCount}");
         }
+
         #endregion
 
         #region Fallback
-        private static string Fallback(string uri, string fallbackUri)
+
+        private static string Fallback(string uri,
+                                       string fallbackUri)
         {
             var policy = Polly.Fallback.FallbackPolicy<HttpResponseMessage>
                 .HandleResult(s => !s.IsSuccessStatusCode)
@@ -153,42 +157,49 @@
             var message = policy.Execute(() => CreateResponseMessageFunc(uri).Invoke());
             return message.Content.ReadAsStringAsync().Result;
         }
+
         #endregion
 
         #region Cache
+
         static readonly MemoryCache MemoryCache = new MemoryCache(new MemoryCacheOptions());
         static readonly MemoryCacheProvider MemoryCacheProvider = new MemoryCacheProvider(MemoryCache);
-        
+
         static readonly Func<Context, HttpResponseMessage, Ttl> CacheFilter =
-            (ctx, msg) => new Ttl(
-                timeSpan:msg.StatusCode == HttpStatusCode.OK ? TimeSpan.FromMinutes(30) : TimeSpan.Zero,
-                slidingExpiration:true);
-            
+        (ctx,
+         msg) => new Ttl(
+            timeSpan: msg.StatusCode == HttpStatusCode.OK ? TimeSpan.FromMinutes(30) : TimeSpan.Zero,
+            slidingExpiration: true);
+
         static readonly IAsyncPolicy<HttpResponseMessage> CacheFilterPolicy =
             Policy.CacheAsync<HttpResponseMessage>(
                 MemoryCacheProvider.AsyncFor<HttpResponseMessage>(), //note the .AsyncFor<HttpResponseMessage>
                 new ResultTtl<HttpResponseMessage>(CacheFilter),
                 onCacheError: null
             );
-        
+
         static CachePolicy<HttpResponseMessage> cachePolicy = Policy.Cache<HttpResponseMessage>(
             MemoryCacheProvider,
             new RelativeTtl(TimeSpan.FromMinutes(5)));
-        
+
         private static string Cache(string uri)
         {
             var message = cachePolicy.Execute(ctx => CreateResponseMessageFunc(uri).Invoke(), new Context(uri));
             return message.Content.ReadAsStringAsync().Result;
         }
-        
+
         private static string CacheWithFilter(string uri)
         {
-            var message = CacheFilterPolicy.ExecuteAsync(ctx => Task.FromResult(CreateResponseMessageFunc(uri).Invoke()), new Context(uri));
+            var message =
+                CacheFilterPolicy.ExecuteAsync(ctx => Task.FromResult(CreateResponseMessageFunc(uri).Invoke()),
+                    new Context(uri));
             return message.Result.Content.ReadAsStringAsync().Result;
         }
+
         #endregion
-        
+
         #region Circuit breaker
+
         static Polly.CircuitBreaker.CircuitBreakerPolicy<HttpResponseMessage> BasicCircuitBreakerPolicy = Policy
             .HandleResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode)
             .CircuitBreaker(2, TimeSpan.FromSeconds(5));
@@ -208,27 +219,31 @@
 
             return message.Content.ReadAsStringAsync().Result;
         }
+
         #endregion
-        
+
         #region Policy wrap
-        private static string Wrap(string uri, string fallbackUri)
+
+        private static string Wrap(string uri,
+                                   string fallbackUri)
         {
             var retryPolicy = Policy
                 .HandleResult<HttpResponseMessage>(m => m.StatusCode != HttpStatusCode.OK)
                 .Retry(2, OnRetry);
-            
+
             var fallbackPolicy = Polly.Fallback.FallbackPolicy<HttpResponseMessage>
                 .HandleResult(s => !s.IsSuccessStatusCode)
                 .Fallback(() => CreateResponseMessageFunc(fallbackUri).Invoke());
-            
+
             var wrapPolicy = Policy.Wrap(retryPolicy, fallbackPolicy);
 
             var message = wrapPolicy.Execute(CreateResponseMessageFunc(uri));
 
             return message.Content.ReadAsStringAsync().Result;
         }
+
         #endregion
-        
+
         private static Func<string> CreateFunc(string uri)
         {
             return () =>
